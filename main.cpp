@@ -17,6 +17,7 @@ int main()
   uint32_t extensionCount = 0;
   vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
+  printf("Hello Vulkan!\n");
   printf("Extension count %i\n", extensionCount);
 
   glm::mat4 testMatrix(1.0f);
