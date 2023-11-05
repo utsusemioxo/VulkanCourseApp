@@ -11,6 +11,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
   try
   {
     createInstance();
+    setupDebugMessenger();
     getPhysicalDevice();
     createLogicalDevice();
   }
@@ -25,8 +26,16 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 
 void VulkanRenderer::cleanup()
 {
+  if (enableValidationLayers)
+  {
+    DestroyDebugUtilsMessengerEXT(instance, debugMessager, nullptr);
+  }
+
   vkDestroyDevice(mainDevice.logicalDevice, nullptr);
   vkDestroyInstance(instance, nullptr);
+
+  glfwDestroyWindow(window);
+  glfwTerminate();
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -35,12 +44,6 @@ VulkanRenderer::~VulkanRenderer()
 
 void VulkanRenderer::createInstance()
 {
-  std::cout << enableValidationLayers << std::endl;
-  if (enableValidationLayers && !checkValidationLayerSupport())
-  {
-    throw std::runtime_error("validation layers requested, but not available!");
-  }
-
   // Information about the application itself
   // Most data here doesn't affect the program and is for developer convenience
   VkApplicationInfo appInfo = {};
@@ -58,32 +61,22 @@ void VulkanRenderer::createInstance()
 
   // Create list to hold instance extensions
   std::vector<const char*> instanceExtensions = std::vector<const char*>();
-
-  // Set up extensions Instance will use
-  uint32_t glfwExtensionCount = 0;                                      // GLFW may require multiple extensions
-  const char** glfwExtensions;                                          // Extensions passed as array of cstrings, so need pointer (the array) to pointer (the cstring)
-
-  // Get GLFW extensions
-  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-  // Add GLFW extensions to list of extensions
-  for (size_t i = 0; i < glfwExtensionCount; i++)
-  {
-    instanceExtensions.push_back(glfwExtensions[i]);
-  }
-
-  if (!checkInstanceExtensionSupport(&instanceExtensions))
-  {
-    throw std::runtime_error("VkInstance does not support required extensions!");
-  }
+  instanceExtensions = getRequiredExtensions();
 
   createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
   createInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
-
+  VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+  if (enableValidationLayers && !checkValidationLayerSupport())
+  {
+    throw std::runtime_error("validation layers requested, but not available!");
+  }
   if (enableValidationLayers) {
     createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
     createInfo.ppEnabledLayerNames = validationLayers.data();
+
+    populateDebugMessengerCreateInfo(debugCreateInfo);
+    createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
   }
   else
   {
@@ -140,6 +133,63 @@ void VulkanRenderer::createLogicalDevice()
   vkGetDeviceQueue(mainDevice.logicalDevice, indices.graphicsFamily, 0, &graphicsQueue);
 }
 
+VkResult VulkanRenderer::CreateDebugUtilsMessengerEXT(
+  VkInstance instance,
+  const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+  const VkAllocationCallbacks* pAllocator,
+  VkDebugUtilsMessengerEXT* pDebugMessenger)
+{
+  auto func =
+    (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+
+  if (func != nullptr)
+  {
+    return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+  }
+  else
+  {
+    return VK_ERROR_EXTENSION_NOT_PRESENT;
+  }
+}
+
+void VulkanRenderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
+{
+  createInfo = {};
+  createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  createInfo.messageSeverity
+    = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+    | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+  createInfo.messageType
+    = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+    | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+    | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+  createInfo.pfnUserCallback = debugCallBack;
+  createInfo.pUserData = nullptr;
+}
+
+void VulkanRenderer::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator)
+{
+  auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+  if (func != nullptr)
+  {
+    func(instance, debugMessager, pAllocator);
+  }
+}
+
+void VulkanRenderer::setupDebugMessenger()
+{
+  if (!enableValidationLayers) return;
+
+  VkDebugUtilsMessengerCreateInfoEXT createInfo{};
+  populateDebugMessengerCreateInfo(createInfo);
+
+  if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessager) != VK_SUCCESS)
+  {
+    throw std::runtime_error("failed to set up debug messenger!");
+  }
+}
+
 
 void VulkanRenderer::getPhysicalDevice()
 {
@@ -164,6 +214,24 @@ void VulkanRenderer::getPhysicalDevice()
       mainDevice.physicalDevice = device;
       break;
     }
+  }
+}
+
+std::vector<const char*> VulkanRenderer::getRequiredExtensions()
+{
+  {
+    uint32_t glfwExtensionCount{ 0 };     // GLFW may require multiple extensions
+    const char** glfwExtensions;          // Extensions passed as array of cstrings, so need pointer (the array) to pointer (the cstring)
+    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+    std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+    if (enableValidationLayers)
+    {
+      extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    }
+
+    return extensions;
   }
 }
 
@@ -243,6 +311,17 @@ bool VulkanRenderer::checkValidationLayerSupport()
   }
 
   return true;
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debugCallBack(
+  VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+  VkDebugUtilsMessageTypeFlagsEXT messageType,
+  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+  void* pUserData)
+{
+  std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+
+  return VK_FALSE;
 }
 
 QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice device)

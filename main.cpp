@@ -41,9 +41,5 @@ int main()
 
   vulkan_renderer.cleanup();
 
-  // Destroy GLFW window and stop GLFW
-  glfwDestroyWindow(window);
-  glfwTerminate();
-
   return 0;
 }
