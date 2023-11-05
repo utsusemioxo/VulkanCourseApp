@@ -35,6 +35,12 @@ VulkanRenderer::~VulkanRenderer()
 
 void VulkanRenderer::createInstance()
 {
+  std::cout << enableValidationLayers << std::endl;
+  if (enableValidationLayers && !checkValidationLayerSupport())
+  {
+    throw std::runtime_error("validation layers requested, but not available!");
+  }
+
   // Information about the application itself
   // Most data here doesn't affect the program and is for developer convenience
   VkApplicationInfo appInfo = {};
@@ -74,9 +80,16 @@ void VulkanRenderer::createInstance()
   createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
   createInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
-  // TODO: Set up validation Layers that Instance will use
-  createInfo.enabledLayerCount = 0;
-  createInfo.ppEnabledLayerNames = nullptr;
+
+  if (enableValidationLayers) {
+    createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+    createInfo.ppEnabledLayerNames = validationLayers.data();
+  }
+  else
+  {
+    createInfo.enabledLayerCount = 0;
+    createInfo.ppEnabledLayerNames = nullptr;
+  }
 
   // Create instance
   VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
@@ -126,6 +139,7 @@ void VulkanRenderer::createLogicalDevice()
   // From given logical device, of given Queue Family, of given Queue Index (0 since only one queue), place reference in given VkQueue
   vkGetDeviceQueue(mainDevice.logicalDevice, indices.graphicsFamily, 0, &graphicsQueue);
 }
+
 
 void VulkanRenderer::getPhysicalDevice()
 {
@@ -199,6 +213,36 @@ bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice device)
   QueueFamilyIndices indices = getQueueFamilies(device);
 
   return indices.isValid();
+}
+
+bool VulkanRenderer::checkValidationLayerSupport()
+{
+  uint32_t layerCount;
+  vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+  std::vector<VkLayerProperties> availableLayers(layerCount);
+  vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+  for (const char* layerName : validationLayers)
+  {
+    bool layerFound = false;
+
+    for (const auto& layerProperties : availableLayers)
+    {
+      if (strcmp(layerName, layerProperties.layerName) == 0)
+      {
+        layerFound = true;
+        break;
+      }
+    }
+
+    if (!layerFound)
+    {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice device)

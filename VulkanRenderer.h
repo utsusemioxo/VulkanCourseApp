@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -7,6 +8,16 @@
 #include <vector>
 
 #include "Utilities.h"
+
+#ifndef _DEBUG
+constexpr bool enableValidationLayers = false;
+#else
+constexpr bool enableValidationLayers = true;
+#endif
+
+const std::vector<const char*> validationLayers = {
+"VK_LAYER_KHRONOS_validation"
+};
 
 class VulkanRenderer
 {
@@ -24,7 +35,7 @@ private:
   // Vulkan Components
   VkInstance instance;
 
-  struct {
+  struct mainDevice {
     VkPhysicalDevice physicalDevice;
     VkDevice logicalDevice;
   } mainDevice;
@@ -42,6 +53,7 @@ private:
   // -- Checker Functions
   bool checkInstanceExtensionSupport(std::vector<const char*>* checkExtensions);
   bool checkDeviceSuitable(VkPhysicalDevice device);
+  static bool checkValidationLayerSupport();
 
   // -- Getter Functions
   QueueFamilyIndices getQueueFamilies(VkPhysicalDevice device);
